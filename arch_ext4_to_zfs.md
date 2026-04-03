@@ -4,7 +4,7 @@
 
 В принципе - данная инструкция подойдёт для любого дистрибутива, если вы знаете тонкости управления загрузчиком и процессом загрузки
 
-[Поиграйтесь](./play_with_zfs.md) заранее на своей системе с файлами в качестве vdev.
+[Поиграйте](./play_with_zfs.md) заранее на своей системе с файлами в качестве vdev.
 
 ## Шаг 1: Подготовка
 
@@ -203,21 +203,21 @@
     * Логирование и спул печати:
 
       ```shell
-      zfs create                     rpool/var/log
-      zfs create                     rpool/var/spool
+      zfs create                     zroot/var/log
+      zfs create                     zroot/var/spool
       ```
 
     * Например, можно создать датасет с опцией, отключающей создание авто-снапшотов:
 
       ```shell
-      zfs create -o com.sun:auto-snapshot=false rpool/var/cache
-      zfs create -o com.sun:auto-snapshot=false rpool/var/lib/nfs
+      zfs create -o com.sun:auto-snapshot=false zroot/var/cache
+      zfs create -o com.sun:auto-snapshot=false zroot/var/lib/nfs
       ```
 
     * При использовании Docker рекомендуется выделить для него отдельный датасет
 
       ```shell
-      zfs create -o com.sun:auto-snapshot=false rpool/var/lib/docker
+      zfs create -o com.sun:auto-snapshot=false zroot/var/lib/docker
       ```
 
 Вы можете создать сколько угодно датасетов по своему усмотрению, посмотреть подсказки можно в [этом источнике](https://openzfs.github.io/openzfs-docs/Getting%20Started/Debian/Debian%20Trixie%20Root%20on%20ZFS.html#step-3-system-installation), однако, не стоит увлекаться. Рекомендую продумать этот момент и вынести на бумагу. Датасет не равно директории, помните об этом. Также не забывайте, что для каждого шага вложенности должен быть создан датасет предыдущего этапа.
