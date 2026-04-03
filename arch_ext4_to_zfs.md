@@ -4,6 +4,8 @@
 
 В принципе - данная инструкция подойдёт для любого дистрибутива, если вы знаете тонкости управления загрузчиком и процессом загрузки
 
+[Поиграйтесь](./play_with_zfs.md) заранее на своей системе с файлами в качестве vdev.
+
 ## Шаг 1: Подготовка
 
  1. Внимательно изучите расположение примонтированных разделов с помощью команд `df -h`, `lsblk`, `parted`, `ls -l /dev/disk/by-id/`. Запишите на бумаге как можно больше информации, составьте дерево вложенности примонтированных устройств и их id.
@@ -34,7 +36,7 @@
       ```
       Обратите внимание на закрывающие слэши в путях команды
 
- 1. Установите поддержку ZFS в Live-систему (по мотивам (этой)[https://openzfs.github.io/openzfs-docs/Getting%20Started/Debian/index.html#installation] и (этой)[https://openzfs.github.io/openzfs-docs/Getting%20Started/Debian/Debian%20Trixie%20Root%20on%20ZFS.html#step-1-prepare-the-install-environment] инструкций) . Все операции производятся от имени суперпользователя (root).
+ 1. Установите поддержку ZFS в Live-систему (по мотивам [этой](https://openzfs.github.io/openzfs-docs/Getting%20Started/Debian/index.html#installation) и [этой](https://openzfs.github.io/openzfs-docs/Getting%20Started/Debian/Debian%20Trixie%20Root%20on%20ZFS.html#step-1-prepare-the-install-environment) инструкций) . Все операции производятся от имени суперпользователя (root).
 
     * Добавьте репозиторий backports и установите приоритет для поддержки ZFS
 
@@ -165,3 +167,62 @@
             -O canmount=off -O mountpoint=/ -R /mnt \
             zroot ${DISK}-part4
         ```
+
+## Шаг 3: Создание датасетов
+
+ 1. Создание основных датасетов-контейнеров
+
+    ```shell
+    zfs create -o canmount=off -o mountpoint=none zroot/ROOT
+    zfs create -o canmount=off -o mountpoint=none broot/BOOT
+    ```
+
+ 1. Создание и монтирование датасетов для монтирования корневой директории и директории /boot
+
+    ```shell
+    zfs create -o canmount=noauto -o mountpoint=/ zroot/ROOT/debian
+    zfs mount zroot/ROOT/debian
+    
+    zfs create -o mountpoint=/boot zboot/BOOT/debian
+    ```
+
+ 1. Создание датасетов для основных системных директорий
+
+    ```shell
+    zfs create                     zroot/home
+    zfs create -o mountpoint=/root zroot/home/root
+    chmod 700 /mnt/root
+    zfs create -o canmount=off     zroot/var
+    zfs create -o canmount=off     zroot/var/lib
+    ```
+
+ 1. Создание второстепенных датасетов.
+
+    *Используется в основном для облегчения управления снапшотами и автоматизации.*
+
+    * Логирование и спул печати:
+
+      ```shell
+      zfs create                     rpool/var/log
+      zfs create                     rpool/var/spool
+      ```
+
+    * Например, можно создать датасет с опцией, отключающей создание авто-снапшотов:
+
+      ```shell
+      zfs create -o com.sun:auto-snapshot=false rpool/var/cache
+      zfs create -o com.sun:auto-snapshot=false rpool/var/lib/nfs
+      ```
+
+    * При использовании Docker рекомендуется выделить для него отдельный датасет
+
+      ```shell
+      zfs create -o com.sun:auto-snapshot=false rpool/var/lib/docker
+      ```
+
+Вы можете создать сколько угодно датасетов по своему усмотрению, посмотреть подсказки можно в [этом источнике](https://openzfs.github.io/openzfs-docs/Getting%20Started/Debian/Debian%20Trixie%20Root%20on%20ZFS.html#step-3-system-installation), однако, не стоит увлекаться. Рекомендую продумать этот момент и вынести на бумагу. Датасет не равно директории, помните об этом. Также не забывайте, что для каждого шага вложенности должен быть создан датасет предыдущего этапа.
+
+## Шаг 4: Копирование файлов
+
+ 1.  
+
