@@ -291,13 +291,15 @@
     chown user:user /home/user
     ```
 
- 1. Установим ZFS, если этого не было сделано до начала процесса миграции. Я пользуюсь помощником пакетного менеджера yay, если вы пользуетесь другим помощниклм - ипользуйте его, либо воспользуйтесь AUR. Также, как видно из следующей комманды, я использую ядро LTS, если вы используете другое - необходимо устанавливать [ZFS для вашего ядра](https://wiki.archlinux.org/title/ZFS#Installation). 
+ 1. Установим ZFS, если этого не было сделано до начала процесса миграции. Я пользуюсь помощником пакетного менеджера yay, если вы пользуетесь другим помощником - ипользуйте его, либо воспользуйтесь AUR напрямую. 
+
+    Специалисты рекомендуют устанавливать модуль ядра DKMS. Также, как видно из следующей комманды, я использую ядро LTS, данная опция практически гарантирует совместимость с драйверами. Так или иначе, необходимо устанавить заголовки ядра для компиляции модуля. Все опции и рекомендации по установке [ZFS для Arch Linux можно найти в статье по ссылке.](https://wiki.archlinux.org/title/ZFS#Installation). 
 
     ```shell
-    yay -S zfs-linux-lts zfs-utils
+    yay -S linux-lts-headers zfs-dkms zfs-utils
     ```
 
-    Если хотите ускорить установку и упростить последующие обновления - вы можете воспользоваться специальным репозиторием archzfs и производить установку оттуда.
+    Если хотите ускорить установку и последующие обновления - вы можете воспользоваться специальным репозиторием archzfs и производить установку оттуда.
 
     ```shell
     cat >> /etc/pacman.conf << EOF
@@ -319,6 +321,8 @@
     pacman -S archzfs-linux-lts
     ```
 
+    Однако, всё же рекомендуется использовать DKMS-модуль.
+
  1. Теперь пропишем hostid в кэш zfs и установим этот кэш для пулов (это требуется для правильной работы ФС)
 
     ```shell
@@ -335,6 +339,8 @@
       HOOKS=(... ... zfs filesystems ...)
       ```
 
+    * В случае, если вы используете plymouth и опции "quiet" и "splash" при загрузке, вам придётся установить также пакет `plymouth-zfs`, а в файл `/etc/mkinitcpio.conf` вместо "zfs" добавить "plymouth plymouth-zfs" перед "filesystems" (см. выше)
+
     * Также добавление модуля в систему под chroot требует явного указания версии ядра, сначала узнаем её
 
       ```shell
@@ -349,7 +355,18 @@
 
  1. Настроим загрузчик GRUB
 
-    * Отредактируем `/etc/default/grub`, нужно убрать запись "rootfstype=ext4" и добавить `zfs=zroot/ROOT/arch rw` в строке GRUB_CMDLINE_LINUX
+    * Отредактируем `/etc/default/grub`, нужно изменить запись `rootfstype=ext4` на  `rootfstype=zfs` в строке GRUB_CMDLINE_LINUX
+
+    * Для систем с UEFI
+
+      ```shell
+      pacman -S dosfstools
+      mkdosfs -F 32 -s 1 -n EFI ${DISK}-part2
+      mkdir -p /boot/EFI
+      echo /dev/disk/by-uuid/$(blkid -s UUID -o value ${DISK}-part2) \
+        /boot/EFI vfat defaults 0 0 >> /etc/fstab
+      mount /boot/EFI
+      ```
 
     * Обновим конфиг
 
@@ -368,7 +385,7 @@
     * Для систем с UEFI
 
       ```shell
-      grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=debian --recheck
+      grub-install --target=x86_64-efi --efi-directory=/boot/EFI --bootloader-id=arch --recheck
       ```
 
  1. Закомментируйте строки с "/", "/home", "/boot" и прочими директориями, кроме внешних или явно необходимых в файле `/etc/fstab`. ZFS примонтирует их сам при загрузке.
@@ -426,7 +443,7 @@
 
 ```shell
 exit
-umount -R /mnt
+umount -Rf /mnt
 zpool export zboot
 zpool export zroot
 reboot
@@ -437,6 +454,18 @@ reboot
 ```shell
 zpool import -f zroot # для пула zroot
 ```
+
+Если не получится - грузитесь в LiveCD, как сказано после **Шага 6**, установите поддержку zfs, импортируйте пул с флагом -f, а потом экспортируйте. 
+
+# Шаг 6: Первая загрузка в ОС на ZFS
+
+ 1. После первой удачной загрузки переустановите GRUB и обновите его меню:
+
+    ```shell
+    mkinitcpio -k 6.18.22-1-lts -g /boot/initramfs-linux-lts.img
+    grub-mkconfig -o /boot/grub/grub.cfg
+    grub-install /dev/disk/by-id/ВАШ-ДИСК(без-partX)
+    ```
 
 # Если что-то пошло не так
 
@@ -468,13 +497,13 @@ zpool import -f zroot # для пула zroot
     mount -a
     ```
 
- 1. Проделайте необходимы вам операции
+ 1. Проделайте необходимые вам операции
 
  1. После окончания работ - корректно всё отключите
 
     ```shell
     exit
-    mount | grep zfs | tac | awk '/\/mnt/ {print $3}' | xargs -i{} umount -lf {}
+    umount -Rf /mnt
     zpool export -a
     reboot
     ```
